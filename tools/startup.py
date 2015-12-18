@@ -26,22 +26,65 @@ except:
     print "you should install sklearn before continuing"
 
 print
-print "downloading the Enron dataset (this may take a while)"
-print "to check on progress, you can cd up one level, then execute <ls -lthr>"
-print "Enron dataset should be last item on the list, along with its current size"
-print "download will complete at about 423 MB"
+print "Downloading Enron Corpus..."
+
+import os.path
+old = 0
+def myReportHook(count, blockSize, totalSize):
+    global old
+    progress = 100. * float(count) * float(blockSize) / float(totalSize)
+    progress = int(progress)
+    if(progress > old):
+        old = progress
+        print '\r[{0}] {1}%'.format('#'*(int(progress)/2), progress),
+
 import urllib
-url = "https://www.cs.cmu.edu/~./enron/enron_mail_20150507.tgz"
-urllib.urlretrieve(url, filename="../enron_mail_20150507.tgz") 
-print "download complete!"
 
+fname = "enron_mail_20150507.tgz"
+if (os.path.isfile("../" + fname)):
+    print "File already exists, skipping download (delete it you don't want me to do this)"
+else:
+    url = "https://www.cs.cmu.edu/~./enron/" + fname
+    urllib.urlretrieve(url, filename="../"+fname, reporthook=myReportHook)
+    print "download complete!"
 
-print
-print "unzipping Enron dataset (this may take a while)"
 import tarfile
+import io
 import os
+
+def get_file_progress_file_object_class(on_progress):
+    class FileProgressFileObject(tarfile.ExFileObject):
+        def read(self, size, *args):
+          on_progress(self.name, self.position, self.size)
+          return tarfile.ExFileObject.read(self, size, *args)
+    return FileProgressFileObject
+
+class TestFileProgressFileObject(tarfile.ExFileObject):
+    def read(self, size, *args):
+      on_progress(self.name, self.position, self.size)
+      return tarfile.ExFileObject.read(self, size, *args)
+
+class ProgressFileObject(io.FileIO):
+    def __init__(self, path, *args, **kwargs):
+        self._total_size = os.path.getsize(path)
+        io.FileIO.__init__(self, path, *args, **kwargs)
+
+    def read(self, size):
+        progress = 100. * float(self.tell()) / float(self._total_size)
+        print '\r[{0}] {1:.2f}%'.format('#'*(int(progress)/2), progress),
+        return io.FileIO.read(self, size)
+
+def on_progress(filename, position, total_size):
+    pass
+
+tarfile.TarFile.fileobject = get_file_progress_file_object_class(on_progress)
+
+
 os.chdir("..")
-tfile = tarfile.open("enron_mail_20150507.tgz", "r:gz")
-tfile.extractall(".")
+
+print "Extracting Enron Corpus: "
+tfile = tarfile.open(fileobj=ProgressFileObject(fname))
+tfile.extractall()
+tfile.close()
 
 print "you're ready to go!"
